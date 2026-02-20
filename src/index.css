@@ -1,0 +1,6 @@
+@import "tailwindcss";
+
+:root {
+  --akeneo-purple: rgb(148, 82, 186);
+  --akeneo-purple-light: rgba(148, 82, 186, 0.08);
+}

@@ -1,0 +1,13 @@
+{
+  "position": "pim.product-grid.action-bar",
+  "name": "simple_to_variant_converter",
+  "type": "sdk_script",
+  "file": "dist/variant-converter.js",
+  "configuration": {
+    "default_label": "Variant Converter",
+    "labels": {
+      "en_US": "Variant Converter"
+    }
+  },
+  "credentials": []
+}
