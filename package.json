@@ -25,6 +25,7 @@
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.1.14",
+    "terser": "^5.46.0",
     "typescript": "^5.8.3",
     "unplugin-swc": "^1.5.7",
     "vite": "^7.1.7",

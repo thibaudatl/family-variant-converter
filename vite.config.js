@@ -51,8 +51,8 @@ export default defineConfig(({ mode }) => ({
       fileName: fileName,
       formats: ['es'],
     },
+    minify: mode === 'development' ? false : 'terser',
     ...(mode === 'development' && {
-      minify: false,
       sourcemap: false,
       cssCodeSplit: false,
       emptyOutDir: false,
