@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import type { FamilyVariantType } from '../types';
+
+type FamilyVariantType = Awaited<ReturnType<typeof globalThis.PIM.api.family_variant_v1.get>>;
 
 interface UseFamilyVariantsResult {
   variants: FamilyVariantType[];

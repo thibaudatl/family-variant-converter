@@ -2,10 +2,10 @@ import { cn } from '../lib/utils';
 
 const STEPS = [
   { label: 'Load' },
-  { label: 'Target Family & Variant' },
+  { label: 'Family Variant' },
   { label: 'Axis Values' },
+  { label: 'Model Codes' },
   { label: 'Preview' },
-  { label: 'Confirm' },
   { label: 'Execute' },
 ];
 

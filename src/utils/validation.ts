@@ -1,33 +1,14 @@
-// Types inferred from PIM API
-type AnyProduct = Awaited<ReturnType<typeof globalThis.PIM.api.product_uuid_v1.get>>;
-type AnyVariantAttributeSet = AnyProduct extends never ? never : {
-  level: number;
-  axes: string[];
-  attributes: string[];
-};
-
-export type ProductType = AnyProduct;
-export type VariantAttributeSetType = {
-  level: number;
-  axes: string[];
-  attributes: string[];
-};
-
-export function validateSameFamily(products: ProductType[]): string | null {
-  if (products.length === 0) return 'No products selected.';
-  const family = products[0].family;
-  const different = products.filter((p) => p.family !== family);
-  if (different.length > 0) {
-    return `All selected products must belong to the same family. Found ${different.length} product(s) with a different family.`;
-  }
-  return null;
-}
-
-export function validateSimpleProducts(products: ProductType[]): string[] {
-  return products
-    .filter((p) => p.parent != null)
-    .map((p) => `Product ${p.identifier ?? p.uuid} already has a parent (${p.parent}).`);
-}
+import type {
+  AxisValuesByUuid,
+  FamilyVariantType,
+  ModelTree,
+  ProductType,
+} from '../types';
+import {
+  getAllTargetAxes,
+  getTargetAxesAtLevel,
+  isTargetOneLevel,
+} from './attributeShift';
 
 export function getFirstScalarValue(
   values: ProductType['values'],
@@ -41,66 +22,106 @@ export function getFirstScalarValue(
   return String(data);
 }
 
-export function axisKey(
+/**
+ * Effective axis value visible on a variant (variant override > sub-model > root).
+ * Used to prefill the axis table in step 3.
+ */
+export function effectiveAxisValueForVariant(
+  variant: ProductType,
+  tree: ModelTree,
+  axisCode: string
+): string {
+  const own = getFirstScalarValue(variant.values, axisCode);
+  if (own) return own;
+  if (variant.parent) {
+    const sub = tree.subModels.find((s) => s.code === variant.parent);
+    const subVal = getFirstScalarValue(sub?.values, axisCode);
+    if (subVal) return subVal;
+  }
+  return getFirstScalarValue(tree.root.values, axisCode);
+}
+
+function axisKey(
   uuid: string,
   axes: string[],
-  axisValues: Record<string, Record<string, string>>
+  axisValues: AxisValuesByUuid
 ): string {
   return axes.map((axis) => axisValues[uuid]?.[axis] ?? '').join('|');
 }
 
-export function validateUniqueCombinations(
-  products: ProductType[],
-  axisValues: Record<string, Record<string, string>>,
-  variantAttributeSets: VariantAttributeSetType[]
+/**
+ * Validate that, within each tree:
+ *  - every variant has values for all target axes (level-1 + level-2)
+ *  - combined (L1 + L2) axis values are unique across variants
+ *  - within each level-1 group, level-2 axis values are unique
+ */
+export function validateTreesAgainstTarget(
+  trees: ModelTree[],
+  targetFv: FamilyVariantType,
+  axisValues: AxisValuesByUuid
 ): string[] {
   const errors: string[] = [];
-  const level1Set = variantAttributeSets.find((s) => s.level === 1);
-  const level2Set = variantAttributeSets.find((s) => s.level === 2);
+  const allAxes = getAllTargetAxes(targetFv);
+  const oneLevel = isTargetOneLevel(targetFv);
+  const level1Axes = getTargetAxesAtLevel(targetFv, 1);
+  const level2Axes = getTargetAxesAtLevel(targetFv, 2);
 
-  if (!level1Set) return ['No level-1 variant attribute set found.'];
+  for (const tree of trees) {
+    const rootLabel = tree.root.code;
 
-  const allAxes = [...level1Set.axes, ...(level2Set?.axes ?? [])];
+    // Presence check
+    for (const variant of tree.variants) {
+      for (const axis of allAxes) {
+        if (!axisValues[variant.uuid]?.[axis]) {
+          errors.push(
+            `[${rootLabel}] Variant "${variant.identifier ?? variant.uuid}" is missing value for axis "${axis}".`
+          );
+        }
+      }
+    }
 
-  const fullKeys = products.map((p) => axisKey(p.uuid, allAxes, axisValues));
-  const fullDuplicates = fullKeys.filter((k, i) => k !== '' && fullKeys.indexOf(k) !== i);
-  if (fullDuplicates.length > 0) {
-    errors.push(
-      `Duplicate axis value combinations: ${[...new Set(fullDuplicates)].join(', ')}`
-    );
-  }
+    if (tree.variants.length === 0) continue;
 
-  // Check for empty axis values
-  for (const product of products) {
-    for (const axis of allAxes) {
-      if (!axisValues[product.uuid]?.[axis]) {
+    // Full combination uniqueness
+    const keys = tree.variants.map((v) => axisKey(v.uuid, allAxes, axisValues));
+    const seen = new Map<string, string[]>();
+    tree.variants.forEach((v, i) => {
+      const k = keys[i];
+      if (!k) return;
+      if (!seen.has(k)) seen.set(k, []);
+      seen.get(k)!.push(v.identifier ?? v.uuid);
+    });
+    for (const [k, identifiers] of seen) {
+      if (identifiers.length > 1) {
         errors.push(
-          `Product ${product.identifier ?? product.uuid} is missing value for axis "${axis}".`
+          `[${rootLabel}] Duplicate axis combination "${k}" across variants: ${identifiers.join(', ')}`
         );
       }
     }
-  }
 
-  if (level2Set) {
-    // Within each level-1 group, level-2 axes must be unique
-    const level1Groups = new Map<string, ProductType[]>();
-    for (const product of products) {
-      const key = axisKey(product.uuid, level1Set.axes, axisValues);
-      if (!level1Groups.has(key)) level1Groups.set(key, []);
-      level1Groups.get(key)!.push(product);
-    }
-
-    for (const [groupKey, groupProducts] of level1Groups) {
-      const level2Keys = groupProducts.map((p) =>
-        axisKey(p.uuid, level2Set.axes, axisValues)
-      );
-      const level2Dups = level2Keys.filter(
-        (k, i) => k !== '' && level2Keys.indexOf(k) !== i
-      );
-      if (level2Dups.length > 0) {
-        errors.push(
-          `Duplicate level-2 axis values within group "${groupKey}": ${[...new Set(level2Dups)].join(', ')}`
-        );
+    // Level-2 uniqueness within each level-1 group (only 2-level target FV)
+    if (!oneLevel) {
+      const groups = new Map<string, ProductType[]>();
+      for (const v of tree.variants) {
+        const k = axisKey(v.uuid, level1Axes, axisValues);
+        if (!groups.has(k)) groups.set(k, []);
+        groups.get(k)!.push(v);
+      }
+      for (const [groupKey, groupVariants] of groups) {
+        const l2Seen = new Map<string, string[]>();
+        for (const v of groupVariants) {
+          const k = axisKey(v.uuid, level2Axes, axisValues);
+          if (!k) continue;
+          if (!l2Seen.has(k)) l2Seen.set(k, []);
+          l2Seen.get(k)!.push(v.identifier ?? v.uuid);
+        }
+        for (const [k, identifiers] of l2Seen) {
+          if (identifiers.length > 1) {
+            errors.push(
+              `[${rootLabel}] Within L1 group "${groupKey}", duplicate L2 combination "${k}": ${identifiers.join(', ')}`
+            );
+          }
+        }
       }
     }
   }

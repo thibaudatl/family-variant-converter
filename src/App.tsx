@@ -3,41 +3,39 @@ import { StepIndicator } from './components/StepIndicator';
 import { LoadingStep } from './components/steps/LoadingStep';
 import { FamilyVariantStep } from './components/steps/FamilyVariantStep';
 import { AxisValuesStep } from './components/steps/AxisValuesStep';
-import { ModelCodeStep } from './components/steps/ModelCodeStep';
 import { PreviewStep } from './components/steps/PreviewStep';
+import { ConfirmationStep } from './components/steps/ConfirmationStep';
 import { ExecutionStep } from './components/steps/ExecutionStep';
-import { useSelectedProducts } from './hooks/useSelectedProducts';
-
-type AnyFamilyVariant = Awaited<ReturnType<typeof globalThis.PIM.api.family_variant_v1.get>>;
-type AnyVariantAttributeSet = AnyFamilyVariant['variantAttributeSets'][number];
+import { useSelectedModels } from './hooks/useSelectedModels';
+import type { AxisValuesByUuid, FamilyVariantType, ModelTree } from './types';
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 export default function App() {
-  const { products, familyCode, loading, contextError, validationErrors } =
-    useSelectedProducts();
+  const { trees: initialTrees, familyCode, loading, contextError, validationErrors } =
+    useSelectedModels();
 
   const [currentStep, setCurrentStep] = useState<Step>(1);
-  const [selectedVariant, setSelectedVariant] = useState<AnyFamilyVariant | null>(null);
-  // axisValues: productUuid -> { axisCode -> value }
-  const [axisValues, setAxisValues] = useState<Record<string, Record<string, string>>>({});
-  const [rootModelCode, setRootModelCode] = useState('');
-  const [subModelCodes, setSubModelCodes] = useState<Record<string, string>>({});
+  const [trees, setTrees] = useState<ModelTree[] | null>(null);
+  const [selectedVariant, setSelectedVariant] = useState<FamilyVariantType | null>(null);
+  const [targetFamilyCode, setTargetFamilyCode] = useState('');
+  const [axisValues, setAxisValues] = useState<AxisValuesByUuid>({});
 
-  const variantAttributeSets: AnyVariantAttributeSet[] =
-    selectedVariant?.variantAttributeSets ?? [];
+  // Seed trees once they're loaded; allow step 1 to forward them into state.
+  const activeTrees = trees ?? initialTrees;
 
-  function handleSubModelCodeChange(groupKey: string, code: string) {
-    setSubModelCodes((prev) => ({ ...prev, [groupKey]: code }));
+  function handleRemoveTree(rootCode: string) {
+    const next = (trees ?? initialTrees).filter((t) => t.root.code !== rootCode);
+    setTrees(next);
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-3xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 p-6">
         <div className="mb-6">
-          <h1 className="text-xl font-bold text-gray-900">Simple → Variant Converter</h1>
+          <h1 className="text-xl font-bold text-gray-900">Change Family Variant</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Convert simple products into a variant product hierarchy
+            Migrate selected root product models to a different family variant
           </p>
         </div>
 
@@ -48,8 +46,9 @@ export default function App() {
             loading={loading}
             contextError={contextError}
             validationErrors={validationErrors}
-            products={products}
+            trees={activeTrees}
             familyCode={familyCode}
+            onRemoveTree={handleRemoveTree}
             onContinue={() => setCurrentStep(2)}
           />
         )}
@@ -57,8 +56,10 @@ export default function App() {
         {currentStep === 2 && (
           <FamilyVariantStep
             familyCode={familyCode}
-            onSelect={(variant) => {
+            trees={activeTrees}
+            onSelect={(variant, target) => {
               setSelectedVariant(variant);
+              setTargetFamilyCode(target);
               setCurrentStep(3);
             }}
             onBack={() => setCurrentStep(1)}
@@ -67,8 +68,8 @@ export default function App() {
 
         {currentStep === 3 && selectedVariant && (
           <AxisValuesStep
-            products={products}
-            variantAttributeSets={variantAttributeSets}
+            trees={activeTrees}
+            targetVariant={selectedVariant}
             axisValues={axisValues}
             onAxisValuesChange={setAxisValues}
             onContinue={() => setCurrentStep(4)}
@@ -77,27 +78,21 @@ export default function App() {
         )}
 
         {currentStep === 4 && selectedVariant && (
-          <ModelCodeStep
-            products={products}
-            variantAttributeSets={variantAttributeSets}
+          <PreviewStep
+            trees={activeTrees}
+            targetVariant={selectedVariant}
             axisValues={axisValues}
-            familyCode={familyCode}
-            rootModelCode={rootModelCode}
-            subModelCodes={subModelCodes}
-            onRootModelCodeChange={setRootModelCode}
-            onSubModelCodeChange={handleSubModelCodeChange}
+            sourceFamilyCode={familyCode}
+            targetFamilyCode={targetFamilyCode || familyCode}
             onContinue={() => setCurrentStep(5)}
             onBack={() => setCurrentStep(3)}
           />
         )}
 
         {currentStep === 5 && selectedVariant && (
-          <PreviewStep
-            products={products}
-            variantAttributeSets={variantAttributeSets}
-            axisValues={axisValues}
-            rootModelCode={rootModelCode}
-            subModelCodes={subModelCodes}
+          <ConfirmationStep
+            trees={activeTrees}
+            targetVariant={selectedVariant}
             onConfirm={() => setCurrentStep(6)}
             onBack={() => setCurrentStep(4)}
           />
@@ -105,13 +100,12 @@ export default function App() {
 
         {currentStep === 6 && selectedVariant && (
           <ExecutionStep
-            products={products}
-            variantAttributeSets={variantAttributeSets}
+            trees={activeTrees}
+            targetVariant={selectedVariant}
             axisValues={axisValues}
-            rootModelCode={rootModelCode}
-            subModelCodes={subModelCodes}
-            familyCode={familyCode}
-            selectedVariantCode={selectedVariant.code}
+            familyCode={targetFamilyCode || familyCode}
+            sourceFamilyCode={familyCode}
+            targetFamilyCode={targetFamilyCode || familyCode}
           />
         )}
       </div>
