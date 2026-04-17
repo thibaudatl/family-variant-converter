@@ -1,12 +1,12 @@
 {
   "position": "pim.product-grid.action-bar",
-  "name": "simple_to_variant_converter",
+  "name": "family_variant_changer",
   "type": "sdk_script",
-  "file": "dist/variant-converter.js",
+  "file": "dist/family-variant-changer.js",
   "configuration": {
-    "default_label": "Variant Converter",
+    "default_label": "Change Family Variant",
     "labels": {
-      "en_US": "Variant Converter"
+      "en_US": "Change Family Variant"
     }
   },
   "credentials": []

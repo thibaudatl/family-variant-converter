@@ -47,7 +47,7 @@ export default defineConfig(({ mode }) => ({
   build: {
     lib: {
       entry: resolve(__dirname, 'src/main.tsx'),
-      name: 'variant-converter',
+      name: 'family-variant-changer',
       fileName: fileName,
       formats: ['es'],
     },

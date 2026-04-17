@@ -1,7 +1,7 @@
 /**
  * This script provides a "watch" functionality for hot-reloading during development.
  *
- * It uses `chokidar` to monitor the `src/` directory for any file changes.
+ * It uses `chokidar` to monitor the `src_old/` directory for any file changes.
  * When a change is detected, it automatically triggers the `make update-dev` command.
  * This command rebuilds the project with development settings and pushes the update
  * to the Akeneo PIM, allowing developers to see their changes in near real-time
